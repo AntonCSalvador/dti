@@ -14,3 +14,7 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+.worktrees/
+test-results/
+playwright-report/
+*.tsbuildinfo
