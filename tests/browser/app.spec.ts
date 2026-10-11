@@ -202,10 +202,56 @@ test("upload errors and provider errors give actionable feedback", async ({
   await page.route("**/api/recommend", (route) =>
     route.fulfill({
       status: 503,
-      json: { error: { message: "Add your OpenAI API key to .env.local." } },
+      json: { error: { message: "Add your OpenRouter API key in setup." } },
     }),
   );
   await page.getByLabel("Round theme").fill("Gothic");
   await page.getByRole("button", { name: "Find looks", exact: true }).click();
-  await expect(page.locator(".error-message")).toContainText("OpenAI API key");
+  await expect(page.locator(".error-message")).toContainText(
+    "OpenRouter API key",
+  );
+});
+
+test("provider and page key follow the selected request and clear on switch or reload", async ({
+  page,
+}) => {
+  const requests: Record<string, unknown>[] = [];
+  await page.route("**/api/recommend", async (route) => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup and about" }).click();
+  const provider = page.getByLabel("AI provider");
+  const key = page.getByLabel("OpenRouter API key (optional)");
+  await expect(provider).toHaveValue("openrouter");
+  await key.fill("router-page-key");
+  await expect(key).toHaveAttribute("type", "password");
+  await page.getByLabel("Round theme").fill("Gothic");
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  expect(requests.at(-1)).toMatchObject({
+    provider: "openrouter",
+    apiKey: "router-page-key",
+  });
+  await provider.selectOption("openai");
+  await expect(page.getByLabel("OpenAI API key (optional)")).toHaveValue("");
+  await page.getByLabel("OpenAI API key (optional)").fill("openai-page-key");
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  expect(requests.at(-1)).toMatchObject({
+    provider: "openai",
+    apiKey: "openai-page-key",
+  });
+  await page.getByRole("button", { name: "Clear API key" }).click();
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  expect(requests.at(-1)).toMatchObject({ provider: "openai" });
+  expect(requests.at(-1)).not.toHaveProperty("apiKey");
+  expect(
+    await page.evaluate(() => [localStorage.length, sessionStorage.length]),
+  ).toEqual([0, 0]);
+  await page.reload();
+  await page.getByRole("button", { name: "Setup and about" }).click();
+  await expect(page.getByLabel("AI provider")).toHaveValue("openrouter");
+  await expect(page.getByLabel("OpenRouter API key (optional)")).toHaveValue(
+    "",
+  );
 });

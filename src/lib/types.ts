@@ -1,5 +1,6 @@
 export type Body = "female" | "male";
 export type Style = "feminine" | "masculine" | "either";
+export type AIProvider = "openrouter" | "openai";
 
 export interface ColorSlot {
   id: string;
@@ -74,6 +75,8 @@ export interface RecommendationInput {
   theme: string;
   style: Style;
   body: Body;
+  provider?: AIProvider;
+  apiKey?: string;
   imageDataUrl?: string;
 }
 
@@ -85,6 +88,7 @@ export interface RecommendationResult {
 }
 
 export interface ProviderStatus {
+  openrouter: boolean;
   openai: boolean;
   search: boolean;
 }

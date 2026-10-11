@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  AIProvider,
   Body,
   Catalog,
   ProviderStatus,
@@ -37,6 +38,8 @@ export function Stylist({
   const [theme, setTheme] = useState("");
   const [style, setStyle] = useState<Style>("either");
   const [body, setBody] = useState<Body>("female");
+  const [provider, setProvider] = useState<AIProvider>("openrouter");
+  const [apiKey, setApiKey] = useState("");
   const [tab, setTab] = useState<"looks" | "wardrobe">("looks");
   const [image, setImage] = useState<string>();
   const [imageName, setImageName] = useState("");
@@ -49,7 +52,9 @@ export function Stylist({
   const uploadVersion = useRef(0);
   const uploadInput = useRef<HTMLInputElement>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
-  const ready = providers.openai && (providers.search || Boolean(image));
+  const ready =
+    (Boolean(apiKey.trim()) || providers[provider]) &&
+    (providers.search || Boolean(image));
   const eligible = catalog.items.filter(
     (item) => item.eligibility === "standard-free",
   );
@@ -116,6 +121,8 @@ export function Stylist({
           theme: theme.trim(),
           style,
           body,
+          provider,
+          ...(apiKey ? { apiKey } : {}),
           ...(image ? { imageDataUrl: image } : {}),
         }),
         signal: request.signal,
@@ -183,24 +190,84 @@ export function Stylist({
           <div>
             <h2>Connect your stylist</h2>
             <p>
-              Add keys to <code>.env.local</code> and restart the app. Keys stay
-              on the server.
+              Choose an AI provider. Paste an API key for this page only, or add
+              it to <code>.env.local</code> and restart the app.
+            </p>
+            <label className="field-label" htmlFor="ai-provider">
+              AI provider
+            </label>
+            <select
+              id="ai-provider"
+              value={provider}
+              disabled={busy}
+              onChange={(event) => {
+                setProvider(event.target.value as AIProvider);
+                setApiKey("");
+                setError("");
+              }}
+            >
+              <option value="openrouter">OpenRouter (free model)</option>
+              <option value="openai">OpenAI (may incur charges)</option>
+            </select>
+            <label className="field-label" htmlFor="ai-key">
+              {provider === "openrouter" ? "OpenRouter" : "OpenAI"} API key
+              (optional)
+            </label>
+            <input
+              id="ai-key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={apiKey}
+              maxLength={512}
+              disabled={busy}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder="Use server key if blank"
+            />
+            {apiKey && (
+              <button
+                type="button"
+                className="text-button"
+                disabled={busy}
+                onClick={() => setApiKey("")}
+              >
+                Clear API key
+              </button>
+            )}
+            <p>
+              Page keys clear on provider change or reload. They are sent only
+              with your look request and are never saved in browser storage.
             </p>
             <ul>
               <li>
+                OpenRouter:{" "}
+                {providers.openrouter
+                  ? "Configured on server"
+                  : "OPENROUTER_API_KEY or OPENROUTER_KEY needed"}
+              </li>
+              <li>
                 OpenAI:{" "}
-                {providers.openai ? "Configured" : "OPENAI_API_KEY needed"}
+                {providers.openai
+                  ? "Configured on server"
+                  : "OPENAI_API_KEY needed"}
               </li>
               <li>
                 Google Images via SerpApi:{" "}
                 {providers.search
-                  ? "Configured"
-                  : "SERPAPI_API_KEY needed (or upload a reference)"}
+                  ? "Configured on server"
+                  : "SERPAPI_API_KEY or SERP_KEY needed (or upload a reference)"}
               </li>
             </ul>
             <p>
-              Reference images and catalog details are sent to OpenAI for
-              matching. Provider usage may incur charges. This is an unofficial
+              Theme, reference images, and catalog details go to{" "}
+              {provider === "openrouter"
+                ? "OpenRouter and its free model provider"
+                : "OpenAI"}{" "}
+              for matching.
+              {provider === "openrouter"
+                ? " Free model availability and quality vary; there is no automatic paid fallback."
+                : " OpenAI API usage may incur charges."}{" "}
+              Search themes go to SerpApi when searching. This is an unofficial
               local companion; you put the outfit on in Roblox.
             </p>
             <a
@@ -361,7 +428,8 @@ export function Stylist({
             {!ready && (
               <p className="setup-hint">
                 <button type="button" onClick={() => setSetup(true)}>
-                  Connect API keys
+                  Set up {provider === "openrouter" ? "OpenRouter" : "OpenAI"}
+                  {!providers.search && !image ? " and search" : ""}
                 </button>{" "}
                 to find looks. The wardrobe is ready to browse.
               </p>

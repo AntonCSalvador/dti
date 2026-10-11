@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { AppError } from "./errors";
+import { resolveProvider } from "./providers";
 import { shortlistSchema, modelResultSchema } from "./schemas";
 import { searchReferences } from "./search";
 import { validateRecipes } from "./validate-recipes";
@@ -23,13 +24,7 @@ export async function recommendOutfits(
   catalog: Catalog,
   signal: AbortSignal,
 ): Promise<RecommendationResult> {
-  if (!process.env.OPENAI_API_KEY?.trim()) {
-    throw new AppError(
-      "AI_NOT_CONFIGURED",
-      "Add your OpenAI API key to .env.local to generate looks. You can browse the free wardrobe now.",
-      503,
-    );
-  }
+  const providerConfig = resolveProvider(input);
   const eligible = catalog.items.filter(
     (item) =>
       item.eligibility === "standard-free" &&
@@ -64,15 +59,23 @@ export async function recommendOutfits(
     );
 
   const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: providerConfig.apiKey,
+    ...(providerConfig.provider === "openrouter"
+      ? { baseURL: providerConfig.baseURL }
+      : {}),
     timeout: 65_000,
     maxRetries: 0,
   });
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1";
+  const model = providerConfig.model;
+  const routerOptions =
+    providerConfig.provider === "openrouter"
+      ? { provider: { require_parameters: true } }
+      : {};
   try {
     const shortlist = await client.responses.parse(
       {
         model,
+        ...routerOptions,
         store: false,
         max_output_tokens: 1800,
         instructions:
@@ -114,7 +117,13 @@ export async function recommendOutfits(
       },
       { signal },
     );
-    const ids = new Set(shortlist.output_parsed?.itemIds ?? []);
+    if (!shortlist.output_parsed)
+      throw new AppError(
+        "AI_INCOMPLETE",
+        "The model couldn't finish a usable shortlist. Try again or choose another provider.",
+        502,
+      );
+    const ids = new Set(shortlist.output_parsed.itemIds);
     const candidates = prepareVisualCandidates(
       eligible.filter((item) => ids.has(item.id)).slice(0, 30),
     );
@@ -127,6 +136,7 @@ export async function recommendOutfits(
     const result = await client.responses.parse(
       {
         model,
+        ...routerOptions,
         store: false,
         max_output_tokens: 6500,
         instructions: STYLIST_INSTRUCTIONS,
@@ -194,9 +204,21 @@ export async function recommendOutfits(
             error.status,
           )
         : error;
+    const status =
+      error && typeof error === "object" && "status" in error
+        ? error.status
+        : undefined;
+    const detail =
+      status === 401 || status === 403
+        ? "The selected provider rejected the API key. Check the key in setup or .env.local."
+        : status === 429
+          ? "The selected provider is rate limited. Wait a moment and try again."
+          : providerConfig.provider === "openrouter" && status === 404
+            ? "No compatible free OpenRouter model is available right now. Try again later or choose OpenAI with its own key."
+            : "The selected provider couldn't complete this request. Try again or choose another provider.";
     throw new AppError(
       "AI_FAILED",
-      `${searchNotice ? `${searchNotice} ` : ""}The outfit service couldn't complete this request. Check your API configuration, or try a different reference image.`,
+      `${searchNotice ? `${searchNotice} ` : ""}${detail}`,
       502,
     );
   }

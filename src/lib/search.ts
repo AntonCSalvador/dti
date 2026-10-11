@@ -112,7 +112,9 @@ export async function searchReferences(
     fetchImpl?: typeof fetch;
   } = {},
 ): Promise<ReferenceSearchResult> {
-  const key = options.apiKey ?? process.env.SERPAPI_API_KEY;
+  const key =
+    options.apiKey ??
+    (process.env.SERPAPI_API_KEY?.trim() || process.env.SERP_KEY?.trim());
   if (!key?.trim())
     throw new AppError(
       "SEARCH_NOT_CONFIGURED",

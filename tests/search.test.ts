@@ -1,5 +1,23 @@
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { normalizeSearchResults, searchReferences } from "../src/lib/search";
+
+afterEach(() => vi.unstubAllEnvs());
+
+it("uses the server SERP_KEY alias without sending it to the fallback", async () => {
+  vi.stubEnv("SERPAPI_API_KEY", "");
+  vi.stubEnv("SERP_KEY", "alias-search-secret");
+  const calls: URL[] = [];
+  await searchReferences("Gothic", "either", {
+    fetchImpl: (async (input: string | URL | Request) => {
+      calls.push(new URL(String(input)));
+      return calls.length === 1
+        ? Response.json({ error: "Your account has run out of searches." })
+        : Response.json({ results: [openverse.results[0]] });
+    }) as typeof fetch,
+  });
+  expect(calls[0].searchParams.get("api_key")).toBe("alias-search-secret");
+  expect(calls[1].href).not.toContain("alias-search-secret");
+});
 
 it("normalizes attributed HTTPS image results and removes duplicates and unsafe URLs", () => {
   const result = normalizeSearchResults({

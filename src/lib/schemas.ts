@@ -12,6 +12,14 @@ export const inputSchema = z
       .max(160, "Keep the theme under 160 characters."),
     style: z.enum(["feminine", "masculine", "either"]),
     body: z.enum(["female", "male"]),
+    provider: z.enum(["openrouter", "openai"]).default("openrouter"),
+    apiKey: z
+      .string()
+      .trim()
+      .min(1)
+      .max(512)
+      .regex(/^[!-~]+$/, "Enter a valid API key without spaces.")
+      .optional(),
     imageDataUrl: z
       .string()
       .max(MAX_IMAGE_DATA_LENGTH, "Choose an image under 4 MB.")
