@@ -1,0 +1,168 @@
+import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import type { Catalog } from "../../src/lib/types";
+
+const catalog: Catalog = JSON.parse(readFileSync("data/catalog.json", "utf8"));
+const item = catalog.items.find(
+  (i) =>
+    i.bodyTypes.includes("female") &&
+    i.colorSlots.some((s) => !s.id.includes(":")),
+)!;
+const fixture = {
+  looks: [
+    {
+      title: "Test outfit",
+      referenceId: "r1",
+      body: "female",
+      why: "Browser test fixture, not a live recommendation.",
+      compromises: ["Test fixture"],
+      pieces: [
+        {
+          itemId: item.id,
+          toggleId: null,
+          colors: [
+            {
+              slotId: item.colorSlots.find((s) => !s.id.includes(":"))!.id,
+              hex: "#123456",
+            },
+          ],
+          note: "Equip this piece first.",
+          essential: true,
+        },
+      ],
+    },
+  ],
+  references: [
+    {
+      id: "r1",
+      title: "Test reference",
+      imageUrl: item.imageUrl,
+      thumbnailUrl: item.imageUrl,
+      sourceUrl: item.sourceUrl,
+    },
+  ],
+  warnings: ["Test data only."],
+};
+
+test("real endpoint accepts same-origin browser requests", async ({ page }) => {
+  await page.goto("/");
+  // Invalid input exercises the actual route without spending provider credits.
+  const result = await page.evaluate(async () => {
+    const response = await fetch("/api/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: "", style: "either", body: "female" }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(result.status).toBe(400);
+  expect(result.body.error.code).toBe("INVALID_REQUEST");
+});
+
+test("theme, catalog filters, setup guidance, and responsive layout", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "What’s the theme?" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  await expect(page.locator(".error-message")).toContainText("Enter the round");
+  await page
+    .getByRole("button", { name: "Old Hollywood", exact: true })
+    .click();
+  await expect(page.getByLabel("Round theme")).toHaveValue("Old Hollywood");
+  await page.getByRole("button", { name: "Setup and about" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Connect your stylist" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close setup" }).click();
+  await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
+  await page
+    .getByRole("button", { name: "Free wardrobe", exact: true })
+    .click();
+  await page.getByLabel("Search wardrobe").fill("Visor");
+  await expect(page.locator(".catalog-item")).toHaveCount(1);
+  await page.getByLabel("Avatar body").selectOption("male");
+  await expect(page.locator(".catalog-item")).toHaveCount(1);
+  await page.getByLabel("Search wardrobe").fill("no-item-matches-this-query");
+  await expect(
+    page.getByText("No items match.", { exact: false }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Your looks", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/mobile.png", fullPage: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("results open a usable dressing checklist", async ({ page }) => {
+  await page.route("**/api/recommend", (route) =>
+    route.fulfill({ json: fixture }),
+  );
+  await page.goto("/");
+  await page.getByLabel("Round theme").fill("Runway");
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  await page.getByRole("button", { name: "Build this look" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your dressing checklist" }),
+  ).toBeVisible();
+  await page.getByRole("checkbox").check();
+  await expect(
+    page.getByText("Everything is on.", { exact: false }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Reset checklist" }).click();
+  await expect(page.getByRole("checkbox")).not.toBeChecked();
+  await page.screenshot({ path: "test-results/checklist.png", fullPage: true });
+});
+
+test("cancel preserves the theme and suppresses late results", async ({
+  page,
+}) => {
+  let finish: (() => void) | undefined;
+  await page.route("**/api/recommend", async (route) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await route.fulfill({ json: fixture }).catch(() => {});
+  });
+  await page.goto("/");
+  await page.getByLabel("Round theme").fill("Gothic");
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Cancel search" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel search" }).click();
+  finish?.();
+  await expect(page.getByLabel("Round theme")).toHaveValue("Gothic");
+  await expect(page.getByRole("heading", { name: "Test outfit" })).toHaveCount(
+    0,
+  );
+});
+
+test("upload errors and provider errors give actionable feedback", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "bad.svg",
+      mimeType: "image/svg+xml",
+      buffer: Buffer.from("<svg/>"),
+    });
+  await expect(page.locator(".error-message")).toContainText("Choose a JPEG");
+  await page.route("**/api/recommend", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: { message: "Add your OpenAI API key to .env.local." } },
+    }),
+  );
+  await page.getByLabel("Round theme").fill("Gothic");
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  await expect(page.locator(".error-message")).toContainText("OpenAI API key");
+});
