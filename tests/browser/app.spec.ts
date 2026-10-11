@@ -120,6 +120,51 @@ test("results open a usable dressing checklist", async ({ page }) => {
   await page.screenshot({ path: "test-results/checklist.png", fullPage: true });
 });
 
+test("fallback notice and image attribution persist into the checklist", async ({
+  page,
+}) => {
+  await page.route("**/api/recommend", (route) =>
+    route.fulfill({
+      json: {
+        ...fixture,
+        searchNotice:
+          "SerpApi searches are exhausted. Switched to Openverse search; matches may be less specific.",
+        references: [
+          {
+            ...fixture.references[0],
+            creator: "Ada Artist",
+            creatorUrl: "https://source.example/ada",
+            license: "CC BY-SA 4.0",
+            licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.getByLabel("Round theme").fill("Runway");
+  await page.getByRole("button", { name: "Find looks", exact: true }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "SerpApi searches are exhausted" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Ada Artist" })).toHaveAttribute(
+    "href",
+    "https://source.example/ada",
+  );
+  await page.getByRole("button", { name: "Build this look" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "SerpApi searches are exhausted" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "CC BY-SA 4.0" }),
+  ).toHaveAttribute("href", "https://creativecommons.org/licenses/by-sa/4.0/");
+  await page.screenshot({ path: "test-results/fallback.png", fullPage: true });
+});
+
 test("cancel preserves the theme and suppresses late results", async ({
   page,
 }) => {
@@ -148,13 +193,11 @@ test("upload errors and provider errors give actionable feedback", async ({
   page,
 }) => {
   await page.goto("/");
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: "bad.svg",
-      mimeType: "image/svg+xml",
-      buffer: Buffer.from("<svg/>"),
-    });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "bad.svg",
+    mimeType: "image/svg+xml",
+    buffer: Buffer.from("<svg/>"),
+  });
   await expect(page.locator(".error-message")).toContainText("Choose a JPEG");
   await page.route("**/api/recommend", (route) =>
     route.fulfill({

@@ -42,21 +42,24 @@ export async function recommendOutfits(
       "No documented items are available for this avatar body. Refresh the catalog and try again.",
       503,
     );
-  const references: ReferenceImage[] = input.imageDataUrl
-    ? [
-        {
-          id: "uploaded",
-          title: "Your reference",
-          sourceUrl: null,
-          imageUrl: input.imageDataUrl,
-          thumbnailUrl: input.imageDataUrl,
-        },
-      ]
+  const search = input.imageDataUrl
+    ? {
+        references: [
+          {
+            id: "uploaded",
+            title: "Your reference",
+            sourceUrl: null,
+            imageUrl: input.imageDataUrl,
+            thumbnailUrl: input.imageDataUrl,
+          },
+        ] as ReferenceImage[],
+      }
     : await searchReferences(input.theme, input.style, { signal });
+  const { references, notice: searchNotice } = search;
   if (references.length === 0)
     throw new AppError(
       "NO_REFERENCES",
-      "No usable reference images were found. Try a more specific theme or upload an image.",
+      `${searchNotice ? `${searchNotice} ` : ""}No usable reference images were found. Try a more specific theme or upload an image.`,
       422,
     );
 
@@ -164,6 +167,7 @@ export async function recommendOutfits(
       );
     return {
       looks: validated.looks,
+      ...(searchNotice ? { searchNotice } : {}),
       references: references.filter((ref) =>
         validated.looks.some((look) => look.referenceId === ref.id),
       ),
@@ -182,10 +186,17 @@ export async function recommendOutfits(
     };
   } catch (error) {
     if (signal.aborted) throw signal.reason;
-    if (error instanceof AppError) throw error;
+    if (error instanceof AppError)
+      throw searchNotice
+        ? new AppError(
+            error.code,
+            `${searchNotice} ${error.message}`,
+            error.status,
+          )
+        : error;
     throw new AppError(
       "AI_FAILED",
-      "The outfit service couldn't complete this request. Check your API configuration, or try a different reference image.",
+      `${searchNotice ? `${searchNotice} ` : ""}The outfit service couldn't complete this request. Check your API configuration, or try a different reference image.`,
       502,
     );
   }

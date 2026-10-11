@@ -23,6 +23,8 @@ OPENAI_MODEL=gpt-4.1
 
 Restart the app after changing configuration. Keep real keys out of Git and chat. The app sends theme/reference imagery and catalog details to OpenAI for matching; SerpApi retrieves Google Images results. These services may charge for usage. An uploaded reference bypasses SerpApi but still requires OpenAI.
 
+If SerpApi reports exhausted searches or a search limit, the app makes one no-key request to [Openverse](https://openverse.org/) and tells you about the switch. Openverse searches openly licensed images, so matches may be less specific; creator, source, and license credits appear with each result. If Openverse fails or has no suitable images, try another theme or upload a reference. Missing or invalid SerpApi keys and unrelated search errors do not trigger the fallback. Openverse receives the theme plus the word "fashion," and its image hosts may receive requests when images are shown. Openverse needs no key or per-search fee; OpenAI usage still may cost money.
+
 - [OpenAI API setup](https://developers.openai.com/api/docs/quickstart)
 - [SerpApi Google Images setup](https://serpapi.com/google-images-api)
 

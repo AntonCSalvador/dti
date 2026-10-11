@@ -22,7 +22,7 @@ import type {
 } from "@/lib/types";
 import { MAX_IMAGE_BYTES } from "@/lib/schemas";
 import { CatalogBrowser } from "./catalog-browser";
-import { OutfitDetail } from "./outfit-detail";
+import { OutfitDetail, ReferenceCredit } from "./outfit-detail";
 import { ItemImage } from "./item-image";
 
 const THEMES = ["Old Hollywood", "Gothic", "Y2K", "Enchanted forest"];
@@ -429,11 +429,17 @@ export function Stylist({
                 key={`${selected}-${look.title}`}
                 look={look}
                 reference={reference}
+                searchNotice={result?.searchNotice}
                 items={catalog.items}
                 onBack={() => setSelected(undefined)}
               />
             ) : result ? (
               <>
+                {result.searchNotice && (
+                  <p className="search-notice" role="status">
+                    {result.searchNotice}
+                  </p>
+                )}
                 <div className="section-heading">
                   <div>
                     <h2 ref={resultHeading} tabIndex={-1}>
@@ -464,6 +470,7 @@ export function Stylist({
                             priority
                           />
                         </button>
+                        {ref && <ReferenceCredit reference={ref} />}
                         <div className="look-copy">
                           <span className="look-meta">
                             {entry.pieces.length} pieces · {entry.body} avatar

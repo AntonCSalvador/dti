@@ -42,6 +42,15 @@ export interface ReferenceImage {
   sourceUrl: string | null;
   imageUrl: string;
   thumbnailUrl: string;
+  creator?: string;
+  creatorUrl?: string;
+  license?: string;
+  licenseUrl?: string;
+}
+
+export interface ReferenceSearchResult {
+  references: ReferenceImage[];
+  notice?: string;
 }
 
 export interface RecipePiece {
@@ -72,6 +81,7 @@ export interface RecommendationResult {
   looks: Recipe[];
   references: ReferenceImage[];
   warnings: string[];
+  searchNotice?: string;
 }
 
 export interface ProviderStatus {

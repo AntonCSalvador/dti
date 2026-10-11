@@ -5,14 +5,44 @@ import { ArrowLeft, Check, Copy, ExternalLink, RotateCcw } from "lucide-react";
 import type { CatalogItem, Recipe, ReferenceImage } from "@/lib/types";
 import { ItemImage } from "./item-image";
 
+export function ReferenceCredit({ reference }: { reference: ReferenceImage }) {
+  if (!reference.license) return null;
+  return (
+    <p className="reference-credit">
+      Image by{" "}
+      {reference.creatorUrl ? (
+        <a href={reference.creatorUrl} target="_blank" rel="noreferrer">
+          {reference.creator ?? "the creator"}
+        </a>
+      ) : (
+        (reference.creator ?? "an unknown creator")
+      )}
+      {" · "}
+      {reference.licenseUrl ? (
+        <a href={reference.licenseUrl} target="_blank" rel="noreferrer">
+          {reference.license}
+        </a>
+      ) : (
+        reference.license
+      )}
+      {" · "}
+      <a href={reference.sourceUrl!} target="_blank" rel="noreferrer">
+        Image source
+      </a>
+    </p>
+  );
+}
+
 export function OutfitDetail({
   look,
   reference,
+  searchNotice,
   items,
   onBack,
 }: {
   look: Recipe;
   reference: ReferenceImage;
+  searchNotice?: string;
   items: CatalogItem[];
   onBack: () => void;
 }) {
@@ -43,6 +73,11 @@ export function OutfitDetail({
       "Compromises:",
       ...look.compromises,
       ...(reference.sourceUrl ? [reference.sourceUrl] : []),
+      ...(reference.license
+        ? [
+            `Image credit: ${reference.creator ?? "Unknown creator"} · ${reference.license}${reference.creatorUrl ? ` · ${reference.creatorUrl}` : ""}${reference.licenseUrl ? ` · ${reference.licenseUrl}` : ""}`,
+          ]
+        : []),
     ].join("\n\n");
   }
   return (
@@ -51,6 +86,11 @@ export function OutfitDetail({
         <ArrowLeft size={17} />
         All looks
       </button>
+      {searchNotice && (
+        <p className="search-notice" role="status">
+          {searchNotice}
+        </p>
+      )}
       <div className="detail-heading">
         <div>
           <h2>{look.title}</h2>
@@ -84,6 +124,7 @@ export function OutfitDetail({
           ) : (
             <p className="source-link">Your uploaded reference</p>
           )}
+          <ReferenceCredit reference={reference} />
           <div className="compromises">
             <h3>What to keep in mind</h3>
             {look.compromises.length ? (
